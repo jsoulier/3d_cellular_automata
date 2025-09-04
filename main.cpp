@@ -39,7 +39,8 @@ static uint64_t time1;
 static uint64_t time2;
 static float delta;
 static float delay{10.0f};
-static bool imguiFocused;
+static bool imGuiFocused;
+static bool imGuiHovered;
 
 struct
 {
@@ -330,7 +331,8 @@ static void DrawImGui()
     ImGui_ImplSDLGPU3_NewFrame();
     ImGui::NewFrame();
     ImGui::Begin("Settings");
-    imguiFocused = ImGui::IsWindowFocused();
+    imGuiHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    imGuiFocused = ImGui::IsWindowFocused();
     if (ImGui::Button("Reset"))
     {
         rules.seed = std::rand() % RAND_MAX;
@@ -578,7 +580,7 @@ int main(int argc, char** argv)
                 running = false;
                 break;
             case SDL_EVENT_MOUSE_MOTION:
-                if (!imguiFocused && event.motion.state & SDL_BUTTON_LMASK)
+                if (!imGuiFocused && !imGuiHovered && event.motion.state & SDL_BUTTON_LMASK)
                 {
                     yaw += event.motion.xrel * PAN;
                     pitch -= event.motion.yrel * PAN;
@@ -587,7 +589,7 @@ int main(int argc, char** argv)
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
-                // if (!imguiFocused)
+                if (!imGuiHovered)
                 {
                     distance -= event.wheel.y * ZOOM;
                     distance = std::max(1.0f, distance);
