@@ -1,0 +1,127 @@
+#version 450
+
+#include "config.h"
+
+struct agent_t
+{
+    vec2 position;
+    float angle;
+    uint color;
+};
+
+layout(local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+layout(set = 0, binding = 0) uniform sampler3D s_trail_read;
+layout(set = 1, binding = 0, rgba32f) uniform writeonly image3D i_trail_write;
+layout(set = 1, binding = 1) buffer t_agents
+{
+    agent_t b_agents[];
+};
+layout(set = 2, binding = 0) uniform t_time
+{
+    uint u_time;
+};
+layout(set = 2, binding = 1) uniform t_delta_time
+{
+    float u_delta_time;
+};
+
+/* www.cs.ubc.ca/~rbridson/docs/schechter-sca08-turbulence.pdf */
+uint hash(uint state)
+{
+    state ^= 2747636419u;
+    state *= 2654435769u;
+    state ^= state >> 16;
+    state *= 2654435769u;
+    state ^= state >> 16;
+    state *= 2654435769u;
+    return state;
+}
+
+void main()
+{
+    const uvec2 id = gl_GlobalInvocationID.xy;
+    if (id.x >= WIDTH || id.y >= HEIGHT)
+    {
+        return;
+    }
+    if (id.x % SPACING != 0 || id.y % SPACING != 0)
+    {
+        return;
+    }
+    agent_t agent = b_agents[id.y * WIDTH + id.x];
+    uint random = hash(uint(agent.position.y * WIDTH +
+        agent.position.x + hash(uint(id.x + u_time * 100000))));
+    if (agent.position.x < 0.0f || agent.position.x >= WIDTH)
+    {
+        agent.position.x = clamp(agent.position.x, 0.0f, WIDTH - 1.0f);
+        vec2 direction = vec2(cos(agent.angle), sin(agent.angle));
+        direction = reflect(direction, vec2(1.0f, 0.0f));
+        agent.angle = atan(direction.y, direction.x);
+    }
+    if (agent.position.y < 0.0f || agent.position.y >= HEIGHT)
+    {
+        agent.position.y = clamp(agent.position.y, 0.0f, HEIGHT - 1.0f);
+        vec2 direction = vec2(cos(agent.angle), sin(agent.angle));
+        direction = reflect(direction, vec2(0.0f, 1.0f));
+        agent.angle = atan(direction.y, direction.x);
+    }
+    float angles[3];
+    angles[0] = agent.angle - SENSE_ANGLE;
+    angles[1] = agent.angle;
+    angles[2] = agent.angle + SENSE_ANGLE;
+    vec2 directions[SENSORS];
+    for (int i = 0; i < SENSORS; i++)
+    {
+        directions[i] = vec2(cos(angles[i]), sin(angles[i]));
+    }
+    ivec2 positions[SENSORS];
+    for (int i = 0; i < SENSORS; i++)
+    {
+        positions[i] = ivec2(agent.position + directions[i] * SENSE_DISTANCE);
+    }
+    float counts[SENSORS];
+    for (int i = 0; i < SENSORS; i++)
+    {
+        counts[i] = 0;
+        for (int x = -SENSE_SIZE; x <= SENSE_SIZE; x++)
+        for (int y = -SENSE_SIZE; y <= SENSE_SIZE; y++)
+        {
+            vec2 coord = positions[i] + vec2(x, y);
+            coord.x = clamp(coord.x, 0, WIDTH - 1);
+            coord.y = clamp(coord.y, 0, HEIGHT - 1);
+            for (int j = 0; j < 2; j++)
+            {
+                counts[i] += texelFetch(s_trail_read, ivec3(coord, agent.color), 0).x;
+            }
+            for (int j = 0; j < COLOR_COUNT; j++)
+            {
+                counts[i] -= texelFetch(s_trail_read, ivec3(coord, j), 0).x;
+            }
+        }
+    }
+    if (counts[1] <= counts[0] && counts[1] <= counts[2])
+    {
+        if ((hash(random) / 4294967295.0f) > 0.5f)
+        {
+            agent.angle += AGENT_STEER_SPEED * u_delta_time;
+        }
+        else
+        {
+            agent.angle -= AGENT_STEER_SPEED * u_delta_time;
+        }
+    }
+    else if (counts[2] > counts[0])
+    {
+        agent.angle += AGENT_STEER_SPEED * u_delta_time;
+    }
+    else if (counts[0] > counts[2])
+    {
+        agent.angle -= AGENT_STEER_SPEED * u_delta_time;
+    }
+    const vec2 direction = vec2(cos(agent.angle), sin(agent.angle));
+    agent.position += AGENT_SPEED * direction;
+    float trail = texelFetch(s_trail_read, ivec3(agent.position, agent.color), 0).x;
+    trail = min(trail + TRAIL_WEIGHT, 1.0f);
+    imageStore(i_trail_write, ivec3(agent.position, agent.color), vec4(trail));
+    b_agents[id.y * WIDTH + id.x] = agent;
+}

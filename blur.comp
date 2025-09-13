@@ -1,0 +1,32 @@
+#version 450
+
+#include "config.h"
+
+layout(local_size_x = THREADS_X, local_size_y = THREADS_Y) in;
+layout(set = 0, binding = 0) uniform sampler3D s_trail_read;
+layout(set = 1, binding = 0, rgba32f) uniform writeonly image3D i_trail_write;
+
+void main()
+{
+    const ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    if (id.x >= WIDTH || id.y >= HEIGHT)
+    {
+        return;
+    }
+    for (int i = 0; i < COLOR_COUNT; i++)
+    {
+        float trail = 0.0f;
+        float start = texelFetch(s_trail_read, ivec3(id, i), 0).x;
+        const int kernel = 1;
+        for (int x = -kernel; x <= kernel; x++)
+        for (int y = -kernel; y <= kernel; y++)
+        {
+            const ivec3 coord = ivec3(id + ivec2(x, y), i);
+            trail += texelFetch(s_trail_read, coord, 0).x;
+        }
+        trail /= pow(kernel * 2 + 1, 2);
+        trail = mix(start, trail, DIFFUSE_SPEED);
+        trail = max(trail - EVAPORATE_SPEED, 0);
+        imageStore(i_trail_write, ivec3(id, i), vec4(trail));
+    }
+}

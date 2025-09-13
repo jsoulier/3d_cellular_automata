@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "win32",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bin/png2slime.exe",
+            "args": [
+                "${workspaceFolder}/images/flower1.jpg"
+            ],
+            "cwd": "${workspaceFolder}/build/bin",
+            "preLaunchTask": "CMake: build"
+        },
+    ]
+}
