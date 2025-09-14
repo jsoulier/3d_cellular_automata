@@ -309,11 +309,6 @@ int main(int argc, char** argv)
                 break;
             }
         }
-        if (!loaded)
-        {
-            continue;
-        }
-        SDL_WaitForGPUSwapchain(device, window);
         SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(device);
         if (!cb)
         {
@@ -327,6 +322,7 @@ int main(int argc, char** argv)
             SDL_CancelGPUCommandBuffer(cb);
             continue;
         }
+        if (loaded)
         {
             SDL_PushGPUDebugGroup(cb, "blit");
             SDL_GPUBlitInfo info = {0};
@@ -344,6 +340,7 @@ int main(int argc, char** argv)
             }
             SDL_PopGPUDebugGroup(cb);
         }
+        if (loaded)
         {
             SDL_PushGPUDebugGroup(cb, "update");
             SDL_GPUStorageBufferReadWriteBinding sbb = {0};
@@ -372,6 +369,7 @@ int main(int argc, char** argv)
             SDL_EndGPUComputePass(pass);
             SDL_PopGPUDebugGroup(cb);
         }
+        if (loaded)
         {
             SDL_PushGPUDebugGroup(cb, "blur");
             SDL_GPUStorageTextureReadWriteBinding stb = {0};
@@ -410,12 +408,15 @@ int main(int argc, char** argv)
                 SDL_Log("Failed to begin draw pass: %s", SDL_GetError());
                 continue;
             }
-            SDL_GPUTextureSamplerBinding binding = {0};
-            binding.texture = trail_texture1;
-            binding.sampler = sampler;
-            SDL_BindGPUGraphicsPipeline(pass, draw_pipeline);
-            SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
-            SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
+            if (loaded)
+            {
+                SDL_GPUTextureSamplerBinding binding = {0};
+                binding.texture = trail_texture1;
+                binding.sampler = sampler;
+                SDL_BindGPUGraphicsPipeline(pass, draw_pipeline);
+                SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+                SDL_DrawGPUPrimitives(pass, 4, 1, 0, 0);
+            }
             SDL_EndGPURenderPass(pass);
             SDL_PopGPUDebugGroup(cb);
         }
